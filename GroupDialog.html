@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+  <base target="_top">
+
+
+  <style>
+
+    body {
+
+      font-family:
+        Arial,
+        sans-serif;
+
+      padding:
+        20px;
+
+      margin:
+        0;
+
+      color:
+        #202124;
+
+    }
+
+
+    h2 {
+
+      margin:
+        0 0 20px;
+
+      font-size:
+        20px;
+
+    }
+
+
+    label {
+
+      display:
+        block;
+
+      margin:
+        15px 0 6px;
+
+      font-weight:
+        600;
+
+    }
+
+
+    select {
+
+      width:
+        100%;
+
+      padding:
+        9px;
+
+      font-size:
+        14px;
+
+      box-sizing:
+        border-box;
+
+      border:
+        1px solid #dadce0;
+
+      border-radius:
+        4px;
+
+      background:
+        white;
+
+    }
+
+
+    button {
+
+      width:
+        100%;
+
+      margin-top:
+        24px;
+
+      padding:
+        11px;
+
+      border:
+        0;
+
+      border-radius:
+        5px;
+
+      cursor:
+        pointer;
+
+      font-size:
+        14px;
+
+      font-weight:
+        600;
+
+      background:
+        #1a73e8;
+
+      color:
+        white;
+
+    }
+
+
+    button:disabled {
+
+      opacity:
+        0.6;
+
+      cursor:
+        default;
+
+    }
+
+
+    #status {
+
+      margin-top:
+        18px;
+
+      white-space:
+        pre-line;
+
+      line-height:
+        1.5;
+
+    }
+
+
+    .success {
+
+      color:
+        #137333;
+
+    }
+
+
+    .error {
+
+      color:
+        #c5221f;
+
+    }
+
+
+    .loading {
+
+      color:
+        #5f6368;
+
+    }
+
+
+    .hint {
+
+      margin-top:
+        16px;
+
+      color:
+        #5f6368;
+
+      font-size:
+        12px;
+
+      line-height:
+        1.5;
+
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+  <h2 id="title">
+    Синхронизация расписания
+  </h2>
+
+
+  <!-- =====================================================
+       КУРС
+       ===================================================== -->
+
+  <label for="course">
+    Курс
+  </label>
+
+
+  <select id="course">
+
+    <option value="">
+      Загрузка...
+    </option>
+
+  </select>
+
+
+  <!-- =====================================================
+       ГРУППА
+       ===================================================== -->
+
+  <label for="group">
+    Группа
+  </label>
+
+
+  <select
+    id="group"
+    disabled
+  >
+
+    <option value="">
+      Сначала выберите курс
+    </option>
+
+  </select>
+
+
+  <!-- =====================================================
+       GOOGLE CALENDAR
+       ===================================================== -->
+
+  <label for="calendar">
+    Google Calendar
+  </label>
+
+
+  <select id="calendar">
+
+    <option value="">
+      Загрузка...
+    </option>
+
+  </select>
+
+
+  <!-- =====================================================
+       КНОПКА
+       ===================================================== -->
+
+  <button
+    id="run"
+    onclick="runAction()"
+    disabled
+  >
+    Синхронизировать
+  </button>
+
+
+  <!-- =====================================================
+       СТАТУС
+       ===================================================== -->
+
+  <div
+    id="status"
+    class="loading"
+  ></div>
+
+
+  <div class="hint">
+
+    Курс определяет лист расписания.
+    Группа выбирается отдельно.
+    Период расписания определяется автоматически.
+
+  </div>
+
+
+<script>
+
+
+/* ==========================================================
+ * РЕЖИМ
+ * ==========================================================
+ */
+
+const MODE =
+  <?!= JSON.stringify(
+    mode || 'sync'
+  ) ?>;
+
+
+/* ==========================================================
+ * ЗАПУСК
+ * ==========================================================
+ */
+
+document.addEventListener(
+  'DOMContentLoaded',
+  load
+);
+
+
+/* ==========================================================
+ * ЗАГРУЗКА
+ * ==========================================================
+ */
+
+function load() {
+
+
+  /*
+   * Если это окно удаления,
+   * меняем текст.
+   */
+  if (
+    MODE === 'delete'
+  ) {
+
+    document.getElementById(
+      'title'
+    ).textContent =
+      'Удаление расписания';
+
+
+    document.getElementById(
+      'run'
+    ).textContent =
+      'Удалить события группы';
+
+  }
+
+
+  /*
+   * Получаем курсы.
+   */
+  google.script.run
+
+    .withSuccessHandler(
+      showCourses
+    )
+
+    .withFailureHandler(
+      showError
+    )
+
+    .getCourses();
+
+
+  /*
+   * Получаем календари.
+   */
+  google.script.run
+
+    .withSuccessHandler(
+      showCalendars
+    )
+
+    .withFailureHandler(
+      showError
+    )
+
+    .getCalendars();
+
+}
+
+
+/* ==========================================================
+ * ПОКАЗАТЬ КУРСЫ
+ * ==========================================================
+ */
+
+function showCourses(
+  courses
+) {
+
+  const select =
+    document.getElementById(
+      'course'
+    );
+
+
+  select.innerHTML =
+    '';
+
+
+  if (
+
+    !courses ||
+    !courses.length
+
+  ) {
+
+    const option =
+      document.createElement(
+        'option'
+      );
+
+
+    option.value =
+      '';
+
+
+    option.textContent =
+      'Курсы не найдены';
+
+
+    select.appendChild(
+      option
+    );
+
+
+    checkReady();
+
+    return;
+
+  }
+
+
+  courses.forEach(
+    course => {
+
+      const option =
+        document.createElement(
+          'option'
+        );
+
+
+      option.value =
+        course.name;
+
+
+      option.textContent =
+        course.name;
+
+
+      select.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  /*
+   * Сразу загружаем группы
+   * первого курса.
+   */
+  loadGroups(
+    select.value
+  );
+}
+
+
+/* ==========================================================
+ * ЗАГРУЗИТЬ ГРУППЫ
+ * ==========================================================
+ */
+
+function loadGroups(
+  courseName
+) {
+
+  const groupSelect =
+    document.getElementById(
+      'group'
+    );
+
+
+  groupSelect.disabled =
+    true;
+
+
+  groupSelect.innerHTML =
+    '<option value="">Загрузка...</option>';
+
+
+  if (
+    !courseName
+  ) {
+
+    checkReady();
+
+    return;
+
+  }
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      showGroups
+    )
+
+    .withFailureHandler(
+      showError
+    )
+
+    .getGroupsForCourse(
+      courseName
+    );
+
+}
+
+
+/* ==========================================================
+ * ПОКАЗАТЬ ГРУППЫ
+ * ==========================================================
+ */
+
+function showGroups(
+  groups
+) {
+
+  const select =
+    document.getElementById(
+      'group'
+    );
+
+
+  select.innerHTML =
+    '';
+
+
+  if (
+
+    !groups ||
+    !groups.length
+
+  ) {
+
+    const option =
+      document.createElement(
+        'option'
+      );
+
+
+    option.value =
+      '';
+
+
+    option.textContent =
+      'Группы не найдены';
+
+
+    select.appendChild(
+      option
+    );
+
+
+    select.disabled =
+      true;
+
+
+    checkReady();
+
+    return;
+
+  }
+
+
+  groups.forEach(
+    group => {
+
+      const option =
+        document.createElement(
+          'option'
+        );
+
+
+      option.value =
+        group;
+
+
+      option.textContent =
+        group;
+
+
+      select.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  select.disabled =
+    false;
+
+
+  checkReady();
+}
+
+
+/* ==========================================================
+ * ПОКАЗАТЬ КАЛЕНДАРИ
+ * ==========================================================
+ */
+
+function showCalendars(
+  calendars
+) {
+
+  const select =
+    document.getElementById(
+      'calendar'
+    );
+
+
+  select.innerHTML =
+    '';
+
+
+  if (
+
+    !calendars ||
+    !calendars.length
+
+  ) {
+
+    const option =
+      document.createElement(
+        'option'
+      );
+
+
+    option.value =
+      '';
+
+
+    option.textContent =
+      'Календари не найдены';
+
+
+    select.appendChild(
+      option
+    );
+
+
+    checkReady();
+
+    return;
+
+  }
+
+
+  calendars.forEach(
+    calendar => {
+
+      const option =
+        document.createElement(
+          'option'
+        );
+
+
+      option.value =
+        calendar.id;
+
+
+      option.textContent =
+
+        calendar.name +
+
+        (
+
+          calendar.selected
+            ? ' ✓'
+            : ''
+
+        );
+
+
+      select.appendChild(
+        option
+      );
+
+    }
+  );
+
+
+  /*
+   * Если есть выбранный календарь,
+   * выбираем его.
+   */
+  const selected =
+    calendars.find(
+      x =>
+        x.selected
+    );
+
+
+  if (
+    selected
+  ) {
+
+    select.value =
+      selected.id;
+
+  }
+
+
+  checkReady();
+}
+
+
+/* ==========================================================
+ * ПРОВЕРКА ГОТОВНОСТИ
+ * ==========================================================
+ */
+
+function checkReady() {
+
+  const course =
+    document.getElementById(
+      'course'
+    ).value;
+
+
+  const group =
+    document.getElementById(
+      'group'
+    ).value;
+
+
+  const calendar =
+    document.getElementById(
+      'calendar'
+    ).value;
+
+
+  document.getElementById(
+    'run'
+  ).disabled =
+
+    !course ||
+    !group ||
+    !calendar;
+}
+
+
+/* ==========================================================
+ * ЗАПУСК
+ * ==========================================================
+ */
+
+function runAction() {
+
+  const button =
+    document.getElementById(
+      'run'
+    );
+
+
+  const status =
+    document.getElementById(
+      'status'
+    );
+
+
+  const course =
+    document.getElementById(
+      'course'
+    ).value;
+
+
+  const group =
+    document.getElementById(
+      'group'
+    ).value;
+
+
+  const calendarId =
+    document.getElementById(
+      'calendar'
+    ).value;
+
+
+  button.disabled =
+    true;
+
+
+  status.className =
+    'loading';
+
+
+  /*
+   * ========================================================
+   * УДАЛЕНИЕ
+   * ========================================================
+   */
+
+  if (
+    MODE === 'delete'
+  ) {
+
+    status.textContent =
+      'Удаляю события...';
+
+
+    google.script.run
+
+      .withSuccessHandler(
+        showResult
+      )
+
+      .withFailureHandler(
+        showError
+      )
+
+      .deleteGroupEvents(
+
+        course,
+
+        group,
+
+        calendarId
+
+      );
+
+
+    return;
+  }
+
+
+  /*
+   * ========================================================
+   * СИНХРОНИЗАЦИЯ
+   * ========================================================
+   */
+
+  status.textContent =
+    'Определяю период, читаю расписание и синхронизирую календарь...';
+
+
+  google.script.run
+
+    .withSuccessHandler(
+      showResult
+    )
+
+    .withFailureHandler(
+      showError
+    )
+
+    .syncSchedule(
+
+      course,
+
+      group,
+
+      calendarId
+
+    );
+
+}
+
+
+/* ==========================================================
+ * РЕЗУЛЬТАТ
+ * ==========================================================
+ */
+
+function showResult(
+  result
+) {
+
+  const status =
+    document.getElementById(
+      'status'
+    );
+
+
+  status.className =
+    'success';
+
+
+  /*
+   * Удаление.
+   */
+  if (
+    MODE === 'delete'
+  ) {
+
+    status.textContent =
+
+      'Курс: ' +
+      result.course +
+
+      '\n' +
+
+      'Группа: ' +
+      result.group +
+
+      '\n' +
+
+      'Удалено событий: ' +
+      result.deleted;
+
+
+  }
+
+
+  /*
+   * Синхронизация.
+   */
+  else {
+
+    status.textContent =
+
+      'Курс: ' +
+      result.course +
+
+      '\n' +
+
+      'Группа: ' +
+      result.group +
+
+      '\n' +
+
+      'Лист: ' +
+      result.sheet +
+
+      '\n' +
+
+      'Период: ' +
+      result.period +
+
+      '\n\n' +
+
+      'Найдено занятий: ' +
+      result.total +
+
+      '\n' +
+
+      'Создано: ' +
+      result.created +
+
+      '\n' +
+
+      'Изменено: ' +
+      result.updated +
+
+      '\n' +
+
+      'Удалено: ' +
+      result.deleted;
+
+  }
+
+
+  buttonReady();
+}
+
+
+/* ==========================================================
+ * ВКЛЮЧИТЬ КНОПКУ
+ * ==========================================================
+ */
+
+function buttonReady() {
+
+  const course =
+    document.getElementById(
+      'course'
+    ).value;
+
+
+  const group =
+    document.getElementById(
+      'group'
+    ).value;
+
+
+  const calendar =
+    document.getElementById(
+      'calendar'
+    ).value;
+
+
+  document.getElementById(
+    'run'
+  ).disabled =
+
+    !course ||
+    !group ||
+    !calendar;
+}
+
+
+/* ==========================================================
+ * ОШИБКА
+ * ==========================================================
+ */
+
+function showError(
+  error
+) {
+
+  const status =
+    document.getElementById(
+      'status'
+    );
+
+
+  status.className =
+    'error';
+
+
+  status.textContent =
+
+    'Ошибка:\n' +
+
+    (
+
+      error &&
+      error.message
+
+        ? error.message
+
+        : String(
+            error
+          )
+
+    );
+
+
+  buttonReady();
+}
+
+
+/* ==========================================================
+ * ИЗМЕНЕНИЕ КУРСА
+ * ==========================================================
+ */
+
+document.getElementById(
+  'course'
+).addEventListener(
+  'change',
+  function() {
+
+    loadGroups(
+      this.value
+    );
+
+  }
+);
+
+
+/* ==========================================================
+ * ИЗМЕНЕНИЕ ГРУППЫ
+ * ==========================================================
+ */
+
+document.getElementById(
+  'group'
+).addEventListener(
+  'change',
+  checkReady
+);
+
+
+/* ==========================================================
+ * ИЗМЕНЕНИЕ КАЛЕНДАРЯ
+ * ==========================================================
+ */
+
+document.getElementById(
+  'calendar'
+).addEventListener(
+  'change',
+  checkReady
+);
+
+</script>
+
+
+</body>
+
+</html>
